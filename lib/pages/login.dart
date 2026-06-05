@@ -1,7 +1,9 @@
 import 'dart:typed_data';
-
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // Dibutuhkan untuk mengambil gambar
+import 'package:image_picker/image_picker.dart';
+import 'package:jejaksehat_mobile/pages/splash.dart'; // Dibutuhkan untuk mengambil gambar
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,6 +13,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  static const String baseUrl = "https://ilham.pplg1.my.id";
+
   // --- CONTROLLER KHUSUS TAB LOGIN ---
   final TextEditingController _loginEmailController = TextEditingController();
   final TextEditingController _loginPasswordController =
@@ -59,14 +63,85 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  void _handleLogin() {
-    final username = _loginEmailController.text.trim();
+  Future<void> _handleLogin() async {
+    final nama = _loginEmailController.text.trim();
+    final password = _loginPasswordController.text.trim();
 
-    if (username.isEmpty || _loginPasswordController.text.trim().isEmpty) {
+    if (nama.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Username dan password wajib diisi')),
       );
       return;
+    }
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'nama': nama, 'password': password}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(data['error'] ?? 'Login gagal')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _handleRegister() async {
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/api/register'),
+      );
+
+      request.fields['nik'] = _signUpUsernameController.text.trim();
+
+      request.fields['nama'] = _signUpEmailController.text.trim();
+
+      request.fields['password'] = _signUpPasswordController.text.trim();
+
+      if (_profileImageBytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'profil',
+            _profileImageBytes!,
+            filename: _profileImageName ?? 'profile.jpg',
+          ),
+        );
+      }
+
+      final response = await request.send();
+
+      final body = await response.stream.bytesToString();
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Registrasi berhasil')));
+
+        print(body);
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(body)));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -316,15 +391,7 @@ class _LoginPageState extends State<LoginPage> {
                             if (isLoginSelected) {
                               _handleLogin();
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    _profileImageName == null
-                                        ? 'Sign Up template belum terhubung API'
-                                        : 'Sign Up template belum terhubung API. Gambar: $_profileImageName',
-                                  ),
-                                ),
-                              );
+                              _handleRegister();
                             }
                           },
                           style: ElevatedButton.styleFrom(
